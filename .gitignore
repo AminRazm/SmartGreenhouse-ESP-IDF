@@ -1,4 +1,4 @@
 build/
 .vscode/
 sdkconfig.old
-components/wifi/private/wifiSecrets.h
+components/wifi_manager/private/wifiSecrets.h
