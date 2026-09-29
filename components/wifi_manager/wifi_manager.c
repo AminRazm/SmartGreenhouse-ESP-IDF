@@ -16,7 +16,7 @@
 
 #define NTP_SERVER "ntp.time.ir"
 #define TIMEZONE "IRST-3:30"
-#define WIFI_MAX_RETRY_ATTEMPTS 6
+#define WIFI_MAX_BACKOFF_STEPS 6
 
 static const char *TAG = "wifi_manager";
 static uint32_t reconnect_attempts = 0;
@@ -69,12 +69,12 @@ static void wifi_event_handler(void *arg,
         case WIFI_EVENT_STA_DISCONNECTED:
         {
 
-            const uint32_t backoff_index = (reconnect_attempts < (WIFI_MAX_RETRY_ATTEMPTS - 1))
+            const uint32_t backoff_index = (reconnect_attempts < (WIFI_MAX_BACKOFF_STEPS - 1))
                                                ? reconnect_attempts
-                                               : (WIFI_MAX_RETRY_ATTEMPTS - 1);
+                                               : (WIFI_MAX_BACKOFF_STEPS - 1);
             const uint32_t delay_ms = 1000U * (1U << backoff_index);
             ESP_LOGW(TAG, "Wi-Fi disconnected. Will retry in %" PRIu32 " ms", delay_ms);
-            if (reconnect_attempts < WIFI_MAX_RETRY_ATTEMPTS) {
+            if (reconnect_attempts < WIFI_MAX_BACKOFF_STEPS) {
                 reconnect_attempts++;
             }
             esp_timer_stop(reconnect_timer);
@@ -109,7 +109,6 @@ esp_err_t wifi_manager_init(void)
     if (s_time_events == NULL) {
         return ESP_ERR_NO_MEM;
     }
-
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         err = nvs_flash_erase();
