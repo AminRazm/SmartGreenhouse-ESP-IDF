@@ -9,7 +9,6 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
-#include "freertos/task.h"
 #include <time.h>
 #include <sys/time.h>
 #include <inttypes.h>
@@ -58,17 +57,13 @@ static void wifi_event_handler(void *arg,
                                int32_t event_id,
                                void *event_data)
 {
-    if (event_base == WIFI_EVENT)
-    {
-        switch (event_id)
-        {
+    if (event_base == WIFI_EVENT) {
+        switch (event_id) {
         case WIFI_EVENT_STA_START:
             esp_wifi_connect();
             break;
 
-        case WIFI_EVENT_STA_DISCONNECTED:
-        {
-
+        case WIFI_EVENT_STA_DISCONNECTED: {
             const uint32_t backoff_index = (reconnect_attempts < (WIFI_MAX_BACKOFF_STEPS - 1))
                                                ? reconnect_attempts
                                                : (WIFI_MAX_BACKOFF_STEPS - 1);
@@ -79,25 +74,19 @@ static void wifi_event_handler(void *arg,
             }
             esp_timer_stop(reconnect_timer);
             const uint64_t timeout_us = (uint64_t)delay_ms * 1000;
-            const esp_err_t err = esp_timer_start_once(reconnect_timer, timeout_us);
-            check_error(err, "esp_timer_start_once");
+            check_error(esp_timer_start_once(reconnect_timer, timeout_us),
+                        "esp_timer_start_once");
             break;
         }
         }
-    }
-    else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
-    {
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         reconnect_attempts = 0;
         esp_timer_stop(reconnect_timer);
-        ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
+        const ip_event_got_ip_t *event = (const ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "Wi-Fi connected, IP: " IPSTR,
                  IP2STR(&event->ip_info.ip));
 
-
-        esp_err_t err = esp_netif_sntp_start();
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "SNTP start failed: %s", esp_err_to_name(err));
-        } else {
+        if (check_error(esp_netif_sntp_start(), "SNTP start") == ESP_OK) {
             ESP_LOGI(TAG, "SNTP started (server: " NTP_SERVER ")");
         }
     }
@@ -111,10 +100,11 @@ esp_err_t wifi_manager_init(void)
     }
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        err = nvs_flash_erase();
-        if (err == ESP_OK) {
-            err = nvs_flash_init();
+        err = check_error(nvs_flash_erase(), "nvs_flash_erase");
+        if (err != ESP_OK) {
+            return err;
         }
+        err = nvs_flash_init();
     }
     err = check_error(err, "nvs_flash_init");
     if (err != ESP_OK) {
@@ -178,7 +168,7 @@ esp_err_t wifi_manager_init(void)
     tzset();
     esp_sntp_config_t sntp_config =
         ESP_NETIF_SNTP_DEFAULT_CONFIG(NTP_SERVER);
-    sntp_config.start = false; 
+    sntp_config.start = false;
     sntp_config.sync_cb = sntp_sync_callback;
     err = check_error(esp_netif_sntp_init(&sntp_config), "esp_netif_sntp_init");
     if (err != ESP_OK) {
