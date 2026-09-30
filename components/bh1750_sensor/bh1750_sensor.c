@@ -52,6 +52,7 @@ static void bh1750_sensor_task(void *arg)
         const esp_err_t err = bh1750_sensor_read_lux(&lux);
 
         if (err == ESP_OK) {
+            ESP_LOGI(TAG, "BH1750: light=%.0f lux", lux);
             if (s_callback != NULL) {
                 const bh1750_sensor_reading_t reading = { .lux = lux };
                 s_callback(&reading, s_callback_ctx);

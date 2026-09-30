@@ -7,7 +7,7 @@
 #include <time.h>
 
 
-#define TARGET_LUX        3500.0f 
+#define TARGET_LUX        4000.0f
 #define ACTIVE_HOUR_START 6      
 #define ACTIVE_HOUR_END   21     
 
@@ -41,9 +41,6 @@ static int adaptive_step(float lux_smooth)
 }
 
 
-#define STEADY_LOG_EVERY_TICKS 30
-
-
 #define MIN_VALID_EPOCH 1600000000
 
 static const char *TAG = "lighting_controller";
@@ -52,7 +49,6 @@ static const char *TAG = "lighting_controller";
 typedef struct {
     int level;              
     float lux_ema;          
-    int steady_ticks;       
     bool has_time;          
     bool saw_first_reading; 
 } light_actuator_ctrl_t;
@@ -60,7 +56,6 @@ typedef struct {
 static light_actuator_ctrl_t s_ctrl = {
     .level = 0,
     .lux_ema = -1.0f,
-    .steady_ticks = 0,
     .has_time = false,
     .saw_first_reading = false,
 };
@@ -82,7 +77,6 @@ static bool is_within_active_hours(void)
 static void apply_level(int level, float lux)
 {
     s_ctrl.level = level;
-    s_ctrl.steady_ticks = 0;
     (void)light_actuator_set_level(level);
     ESP_LOGI(TAG, "Lux=%.0f target=%.0f -> level=%d", lux, TARGET_LUX, level);
 }
@@ -108,15 +102,6 @@ static void control_tick(float lux)
         s_ctrl.has_time = has_time;
     }
 
-    if (!has_time) {
-        if (s_ctrl.level != 0) {
-            s_ctrl.level = 0;
-            (void)light_actuator_set_level(0);
-        }
-        return;
-    }
-
-
     if (has_time && !is_within_active_hours()) {
         if (s_ctrl.level != 0) {
             s_ctrl.level = 0;
@@ -131,11 +116,6 @@ static void control_tick(float lux)
     if (lux_smooth > TARGET_LUX - deadband && lux_smooth < TARGET_LUX + deadband) {
 
 
-        if (++s_ctrl.steady_ticks >= STEADY_LOG_EVERY_TICKS) {
-            s_ctrl.steady_ticks = 0;
-            ESP_LOGI(TAG, "steady: Lux=%.0f target=%.0f -> level=%d",
-                     lux_smooth, TARGET_LUX, s_ctrl.level);
-        }
         return;
     }
 

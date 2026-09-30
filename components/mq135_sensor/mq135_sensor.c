@@ -13,6 +13,7 @@
 
 #define MQ135_SAMPLE_COUNT    20   
 #define MQ135_SAMPLE_PERIOD_MS 100 
+#define MQ135_LOG_INTERVAL_MS  5000
 
 static const char *TAG = "mq135_sensor";
 
@@ -26,6 +27,7 @@ static uint8_t s_sample_count;
 
 static mq135_sensor_reading_callback_t s_callback;
 static void *s_callback_ctx;
+static int s_log_sample_count;
 
 
 static int push_sample_and_get_average(int new_sample)
@@ -53,6 +55,11 @@ static void mq135_sensor_task(void *arg)
         const esp_err_t err = adc_oneshot_read(s_adc_handle, MQ135_ADC_CHANNEL, &raw_sample);
         if (err == ESP_OK) {
             const int average = push_sample_and_get_average(raw_sample);
+
+            if (++s_log_sample_count >= MQ135_LOG_INTERVAL_MS / MQ135_SAMPLE_PERIOD_MS) {
+                ESP_LOGI(TAG, "MQ135: raw=%d, average=%d", raw_sample, average);
+                s_log_sample_count = 0;
+            }
 
             if (s_callback != NULL) {
                 const mq135_sensor_reading_t reading = { .raw_value = average };

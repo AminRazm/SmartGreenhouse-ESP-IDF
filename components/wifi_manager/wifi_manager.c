@@ -9,6 +9,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
+#include "indicator.h"
 #include <time.h>
 #include <sys/time.h>
 #include <inttypes.h>
@@ -44,6 +45,7 @@ static void sntp_sync_callback(struct timeval *tv)
              timeinfo.tm_hour,
              timeinfo.tm_min,
              timeinfo.tm_sec);
+    indicator_set_event(INDICATOR_EVENT_TIME_NOT_SYNCED, false);
     xEventGroupSetBits(s_time_events, TIME_SYNCED_BIT);
 }
 
@@ -60,6 +62,7 @@ static void wifi_event_handler(void *arg,
     if (event_base == WIFI_EVENT) {
         switch (event_id) {
         case WIFI_EVENT_STA_START:
+            indicator_set_event(INDICATOR_EVENT_WIFI_DISCONNECTED, true);
             esp_wifi_connect();
             break;
 
@@ -81,6 +84,7 @@ static void wifi_event_handler(void *arg,
         }
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         reconnect_attempts = 0;
+        indicator_set_event(INDICATOR_EVENT_WIFI_DISCONNECTED, false);
         esp_timer_stop(reconnect_timer);
         const ip_event_got_ip_t *event = (const ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "Wi-Fi connected, IP: " IPSTR,
@@ -98,6 +102,7 @@ esp_err_t wifi_manager_init(void)
     if (s_time_events == NULL) {
         return ESP_ERR_NO_MEM;
     }
+    indicator_set_event(INDICATOR_EVENT_TIME_NOT_SYNCED, true);
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         err = check_error(nvs_flash_erase(), "nvs_flash_erase");

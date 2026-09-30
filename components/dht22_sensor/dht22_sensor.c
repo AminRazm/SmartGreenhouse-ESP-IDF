@@ -170,6 +170,8 @@ static void dht22_sensor_task(void *arg)
 
         if (err == ESP_OK) {
             consecutive_failures = 0;
+            ESP_LOGI(TAG, "DHT22: temperature=%.1f C, humidity=%.1f%%",
+                     reading.temperature, reading.humidity);
 
             if (s_callback != NULL) {
                 s_callback(&reading, s_callback_ctx);

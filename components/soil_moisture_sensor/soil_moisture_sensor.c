@@ -99,6 +99,7 @@ static void soil_moisture_sensor_task(void *arg)
 
             s_last_good_sample = raw_sample;
             const int average = push_sample_and_get_average(raw_sample);
+            ESP_LOGI(TAG, "Soil moisture: raw=%d, average=%d", raw_sample, average);
 
             if (s_callback != NULL) {
                 const soil_moisture_sensor_reading_t reading = {

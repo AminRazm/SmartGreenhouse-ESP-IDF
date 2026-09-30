@@ -28,7 +28,6 @@
 
 
 #define DHT22_STALE_WARN_MS 15000
-#define CLIMATE_STATUS_LOG_MS 10000
 
 static const char *TAG = "climate_controller";
 
@@ -52,7 +51,6 @@ static int64_t s_dht22_sensor_last_ok_us;
 
 
 static fan_actuator_speed_t s_last_applied_speed = FAN_ACTUATOR_SPEED_OFF;
-static int64_t s_last_status_log_us;
 
 
 static fan_actuator_speed_t higher_speed(fan_actuator_speed_t a, fan_actuator_speed_t b)
@@ -105,14 +103,9 @@ static void evaluate_and_apply_fan_speed(void)
     fan_actuator_speed_t speed = (fan_actuator_speed_t)higher_speed(higher_speed(s_level_temperature, s_level_humidity), s_level_gas);
 
     const bool speed_changed = speed != s_last_applied_speed;
-    const bool status_log_due =
-        (s_last_status_log_us == 0) ||
-        ((now_us - s_last_status_log_us) / 1000 >= CLIMATE_STATUS_LOG_MS);
-
-    if (speed_changed || status_log_due) {
+    if (speed_changed) {
         ESP_LOGI(TAG, "Climate: T=%.1fC H=%.1f%% gas=%d -> fan=%d",
                  s_temperature, s_humidity, s_gas_raw, speed);
-        s_last_status_log_us = now_us;
     }
 
     if (speed_changed && fan_actuator_set_speed(speed) == ESP_OK) {
