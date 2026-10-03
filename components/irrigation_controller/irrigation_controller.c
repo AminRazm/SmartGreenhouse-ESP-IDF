@@ -1,6 +1,7 @@
 #include "irrigation_controller.h"
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -10,16 +11,15 @@
 #include "pump_actuator.h"
 #include "soil_moisture_sensor.h"
 
-#define SOIL_DRY_THRESHOLD 1300
-// Optional safety guard: set to 4095 to disable it.
-#define SOIL_SENSOR_DISCONNECTED_THRESHOLD 2400
+#define SOIL_DRY_THRESHOLD 800
+#define SOIL_DRY_CONFIRMATIONS 3
 #define IRRIGATION_COOLDOWN_MS (15 * 60 * 1000)
 
 static const char *TAG = "irrigation_controller";
 
 static int64_t s_next_allowed_us;
 static volatile bool s_cycle_active;
-static bool s_sensor_warning_logged;
+static volatile uint8_t s_dry_readings;
 static TaskHandle_t s_irrigation_task_handle;
 
 static int64_t now_us(void)
@@ -64,7 +64,10 @@ static void irrigation_task(void *arg)
 
     for (;;) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        run_irrigation_cycle();
+        if (s_dry_readings >= SOIL_DRY_CONFIRMATIONS && !s_cycle_active &&
+            now_us() >= s_next_allowed_us) {
+            run_irrigation_cycle();
+        }
     }
 }
 
@@ -73,23 +76,17 @@ static void on_soil_moisture_reading(const soil_moisture_sensor_reading_t *readi
 {
     (void)context;
 
-    if (reading->latest_sample >= SOIL_SENSOR_DISCONNECTED_THRESHOLD) {
-        indicator_set_event(INDICATOR_EVENT_SOIL_SENSOR_ERROR, true);
-        indicator_set_event(INDICATOR_EVENT_SOIL_DRY, false);
-        if (!s_sensor_warning_logged) {
-            ESP_LOGW(TAG, "Soil sensor reading is unusually high (%d); irrigation skipped",
-                     reading->latest_sample);
-            s_sensor_warning_logged = true;
+    if (reading->average_value >= SOIL_DRY_THRESHOLD) {
+        if (s_dry_readings < SOIL_DRY_CONFIRMATIONS) {
+            s_dry_readings++;
         }
-        return;
+    } else {
+        s_dry_readings = 0;
     }
-    s_sensor_warning_logged = false;
-    indicator_set_event(INDICATOR_EVENT_SOIL_SENSOR_ERROR, false);
-    indicator_set_event(INDICATOR_EVENT_SOIL_DRY,
-                       reading->raw_value >= SOIL_DRY_THRESHOLD);
+    const bool soil_is_dry = s_dry_readings >= SOIL_DRY_CONFIRMATIONS;
+    indicator_set_event(INDICATOR_EVENT_SOIL_DRY, soil_is_dry);
 
-    if (reading->raw_value < SOIL_DRY_THRESHOLD || s_cycle_active ||
-        now_us() < s_next_allowed_us) {
+    if (!soil_is_dry || s_cycle_active || now_us() < s_next_allowed_us) {
         return;
     }
 
@@ -109,16 +106,15 @@ esp_err_t irrigation_controller_init(void)
         ESP_LOGE(TAG, "soil_moisture_sensor_init failed: %s", esp_err_to_name(err));
         return err;
     }
-    soil_moisture_sensor_set_reading_callback(on_soil_moisture_reading, NULL);
-
     const BaseType_t created = xTaskCreate(irrigation_task, "irrigation", 3072, NULL, 4,
                                            &s_irrigation_task_handle);
     if (created != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
+    soil_moisture_sensor_set_reading_callback(on_soil_moisture_reading, NULL);
 
-    ESP_LOGI(TAG, "Irrigation initialized: dry<%d, sensor_guard>=%d, cooldown=%d minutes",
-             SOIL_DRY_THRESHOLD, SOIL_SENSOR_DISCONNECTED_THRESHOLD,
+    ESP_LOGI(TAG, "Irrigation initialized: dry>=%d for %d averaged readings, cooldown=%d minutes",
+             SOIL_DRY_THRESHOLD, SOIL_DRY_CONFIRMATIONS,
              IRRIGATION_COOLDOWN_MS / 60000);
     return ESP_OK;
 }

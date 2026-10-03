@@ -7,8 +7,7 @@ extern "C" {
 #endif
 
 typedef struct {
-    int raw_value;
-    int latest_sample;
+    int average_value;
 } soil_moisture_sensor_reading_t;
 
 typedef void (*soil_moisture_sensor_reading_callback_t)(const soil_moisture_sensor_reading_t *reading, void *context);

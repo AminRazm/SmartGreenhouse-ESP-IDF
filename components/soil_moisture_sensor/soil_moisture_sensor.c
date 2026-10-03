@@ -6,24 +6,12 @@
 #include "freertos/task.h"
 #include "shared_adc.h"
 
-
-
-
 #define SOIL_MOISTURE_ADC_CHANNEL     ADC_CHANNEL_0
 #define SOIL_MOISTURE_ADC_BITWIDTH    ADC_BITWIDTH_12
 #define SOIL_MOISTURE_ADC_ATTENUATION ADC_ATTEN_DB_12
 
-
 #define SOIL_MOISTURE_SAMPLE_PERIOD_MS 1000
-
-
 #define SOIL_MOISTURE_AVERAGE_COUNT    10
-
-
-#define SOIL_MOISTURE_MAX_STEP         60
-
-
-#define SOIL_MOISTURE_JUMP_CONFIRMS    5
 
 static const char *TAG = "soil_moisture_sensor";
 
@@ -36,10 +24,6 @@ static uint8_t s_sample_count;
 
 static soil_moisture_sensor_reading_callback_t s_callback;
 static void *s_callback_ctx;
-
-
-static int s_last_good_sample = -1;
-static int s_jump_candidates;
 
 static int push_sample_and_get_average(int new_sample)
 {
@@ -56,57 +40,26 @@ static int push_sample_and_get_average(int new_sample)
     return s_sample_sum / s_sample_count;
 }
 
-
-static bool sample_is_plausible(int new_sample)
-{
-    if (s_last_good_sample < 0) {
-        return true; 
-    }
-
-    int step = new_sample - s_last_good_sample;
-
-    if (step < 0) {
-        step = -step;
-    }
-
-    if (step <= SOIL_MOISTURE_MAX_STEP) {
-        s_jump_candidates = 0;
-        return true;
-    }
-
-
-    if (++s_jump_candidates < SOIL_MOISTURE_JUMP_CONFIRMS) {
-        return false;
-    }
-
-
-    ESP_LOGW(TAG, "Big jump accepted after %d confirms: %d -> %d",
-             SOIL_MOISTURE_JUMP_CONFIRMS, s_last_good_sample, new_sample);
-    s_jump_candidates = 0;
-    return true;
-}
-
 static void soil_moisture_sensor_task(void *arg)
 {
     (void)arg;
 
     while (true) {
-
         int raw_sample;
         const esp_err_t err = adc_oneshot_read(s_adc_handle, SOIL_MOISTURE_ADC_CHANNEL, &raw_sample);
 
-        if (err == ESP_OK && sample_is_plausible(raw_sample)) {
-
-            s_last_good_sample = raw_sample;
+        if (err == ESP_OK) {
             const int average = push_sample_and_get_average(raw_sample);
-            ESP_LOGI(TAG, "Soil moisture: raw=%d, average=%d", raw_sample, average);
 
-            if (s_callback != NULL) {
-                const soil_moisture_sensor_reading_t reading = {
-                    .raw_value = average,
-                    .latest_sample = raw_sample,
-                };
-                s_callback(&reading, s_callback_ctx);
+            if (s_sample_count == SOIL_MOISTURE_AVERAGE_COUNT) {
+                ESP_LOGI(TAG, "Soil moisture: average=%d", average);
+
+                if (s_callback != NULL) {
+                    const soil_moisture_sensor_reading_t reading = {
+                        .average_value = average,
+                    };
+                    s_callback(&reading, s_callback_ctx);
+                }
             }
         }
 

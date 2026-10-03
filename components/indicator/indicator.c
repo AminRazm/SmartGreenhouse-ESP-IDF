@@ -84,9 +84,6 @@ static indicator_pattern_t get_pattern(void)
     if (events & (1U << INDICATOR_EVENT_CRITICAL)) {
         return (indicator_pattern_t){255, 0, 0, 100, 100};
     }
-    if (events & (1U << INDICATOR_EVENT_SOIL_SENSOR_ERROR)) {
-        return (indicator_pattern_t){255, 0, 0, 200, 800};
-    }
     if (events & (1U << INDICATOR_EVENT_WIFI_DISCONNECTED)) {
         return (indicator_pattern_t){255, 0, 0, 250, 1750};
     }
@@ -99,10 +96,6 @@ static indicator_pattern_t get_pattern(void)
     if (events & (1U << INDICATOR_EVENT_PUMP_ACTIVE)) {
         return (indicator_pattern_t){0, 0, 255, 100, 100};
     }
-    if (events & (1U << INDICATOR_EVENT_STARTUP)) {
-        return (indicator_pattern_t){0, 0, 255, 150, 850};
-    }
-
     return (indicator_pattern_t){0, 0, 0, 100, 1900};
 }
 

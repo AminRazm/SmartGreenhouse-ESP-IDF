@@ -8,7 +8,6 @@
 #include "esp_netif_sntp.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/event_groups.h"
 #include "indicator.h"
 #include <time.h>
 #include <sys/time.h>
@@ -21,9 +20,6 @@
 static const char *TAG = "wifi_manager";
 static uint32_t reconnect_attempts = 0;
 static esp_timer_handle_t reconnect_timer = NULL;
-static EventGroupHandle_t s_time_events;
-
-#define TIME_SYNCED_BIT BIT0
 
 static esp_err_t check_error(esp_err_t err, const char *operation)
 {
@@ -46,7 +42,6 @@ static void sntp_sync_callback(struct timeval *tv)
              timeinfo.tm_min,
              timeinfo.tm_sec);
     indicator_set_event(INDICATOR_EVENT_TIME_NOT_SYNCED, false);
-    xEventGroupSetBits(s_time_events, TIME_SYNCED_BIT);
 }
 
 static void reconnect_timer_cb(void *arg)
@@ -98,10 +93,6 @@ static void wifi_event_handler(void *arg,
 
 esp_err_t wifi_manager_init(void)
 {
-    s_time_events = xEventGroupCreate();
-    if (s_time_events == NULL) {
-        return ESP_ERR_NO_MEM;
-    }
     indicator_set_event(INDICATOR_EVENT_TIME_NOT_SYNCED, true);
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -180,19 +171,4 @@ esp_err_t wifi_manager_init(void)
         return err;
     }
     return check_error(esp_wifi_start(), "esp_wifi_start");
-}
-
-bool wifi_manager_wait_for_time_sync(uint32_t timeout_ms)
-{
-    if (s_time_events == NULL) {
-        return false;
-    }
-
-    const EventBits_t bits = xEventGroupWaitBits(
-        s_time_events,
-        TIME_SYNCED_BIT,
-        pdFALSE,
-        pdTRUE,
-        pdMS_TO_TICKS(timeout_ms));
-    return (bits & TIME_SYNCED_BIT) != 0;
 }
