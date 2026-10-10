@@ -16,25 +16,21 @@ void app_main(void)
         ESP_LOGE(TAG, "Indicator initialization failed! Restarting...");
         esp_restart();
     }
-
     if (wifi_manager_init() != ESP_OK)
     {
         ESP_LOGE(TAG, "Wi-Fi initialization failed!");
         indicator_set_event(INDICATOR_EVENT_CRITICAL, true);
     }
-    
     if (lighting_controller_init() != ESP_OK)
     {
         ESP_LOGE(TAG, "Lighting initialization failed!");
         indicator_set_event(INDICATOR_EVENT_CRITICAL, true);
     }
-
     if (climate_controller_init() != ESP_OK)
     {
         ESP_LOGE(TAG, "Climate initialization failed! Restarting...");
         esp_restart();
     }
-
     if (irrigation_controller_init() != ESP_OK)
     {
         ESP_LOGE(TAG, "Irrigation initialization failed! Restarting...");

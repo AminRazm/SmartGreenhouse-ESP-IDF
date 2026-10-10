@@ -4,11 +4,11 @@
 #include "esp_err.h"
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-
-esp_err_t shared_adc1_get_handle(adc_oneshot_unit_handle_t *out_handle);
+    esp_err_t shared_adc1_get_handle(adc_oneshot_unit_handle_t *out_handle);
 
 #ifdef __cplusplus
 }

@@ -3,14 +3,12 @@
 #include "esp_err.h"
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-
-esp_err_t light_actuator_init(void);
-
-
-esp_err_t light_actuator_set_level(int level);
+    esp_err_t light_actuator_init(void);
+    esp_err_t light_actuator_set_level(int level);
 
 #ifdef __cplusplus
 }
