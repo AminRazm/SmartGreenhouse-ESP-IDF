@@ -1,40 +1,52 @@
-# Smart Greenhouse
+# SmartGreenhouse-ESP-IDF
 
-An ESP32-S3 smart greenhouse built with ESP-IDF and C. It monitors environmental conditions 24/7 and automatically controls the fan, lights, and watering system.
+An ESP32-S3 smart greenhouse built with ESP-IDF and C. This version uses a modular firmware architecture with FreeRTOS tasks to monitor environmental conditions and control climate, lighting, and irrigation.
 
 ## Features
 
-- Climate control: Uses temperature, humidity, and gas sensor readings to adjust fan speed.
-- Smart lighting: Adjusts light output based on measured light levels and a daily schedule.
-- Automatic irrigation: Checks soil moisture and runs the water pump when needed.
-- Wi-Fi and time sync: Connects to Wi-Fi and uses SNTP to keep the lighting schedule accurate.
-- Modular firmware: Separate components for sensors, actuators, and control logic.
+- **Climate control:** Uses temperature, humidity, and gas readings to control fan speed.
+- **Smart lighting:** Adjusts light output based on ambient light and a daily schedule.
+- **Automatic irrigation:** Monitors soil moisture and controls the water pump.
+- **Wi-Fi and time sync:** Uses Wi-Fi and SNTP to keep the lighting schedule accurate.
+- **Modular firmware:** Separates sensors, controllers, actuators, and the RGB indicator.
+
+## Architecture
+
+The firmware is divided into separate components for sensors, controllers, actuators, Wi-Fi, and the indicator. FreeRTOS tasks handle independent operations, while callbacks and task notifications support communication between components.
+
+For example, the DHT22 sensor runs in its own task, and the irrigation controller uses a task notification to start an irrigation cycle when the soil is dry. Separating sensor reading, control logic, and hardware actions makes the firmware easier to maintain and extend.
+
+I rewrote the earlier [Arduino and C++ version](https://github.com/AminRazm/SmartGreenhouse-Arduino) when the project needed a clearer way to organize independent operations and respond to sensor readings.
 
 ## Hardware
 
 - ESP32-S3 development board
 - DHT22 — temperature and humidity
 - BH1750 — ambient light level
-- MQ135 — gas sensor
-- Capacitive soil moisture sensor v1.2
-- MOSFET-driven fan, lights, and water pump
+- MQ135 — gas level
+- Capacitive soil moisture sensor
+- MOSFET-driven fan, grow light, and water pump
+- RGB indicator LED
 
 ## Gas Monitoring
 
-The MQ135 continuously monitors changes in gas levels. These readings may help flag unusual greenhouse conditions and provide an early warning of possible plant-health problems, sometimes before visible signs appear.
+The MQ135 monitors changes in gas levels. These readings can help flag unusual greenhouse conditions, but they do not directly detect plant diseases.
 
 ## Build
 
-Configure Wi-Fi credentials before building:
+1. Open `components/wifi_manager/private/wifiSecrets.h.example`.
+2. Enter your Wi-Fi credentials.
+3. Rename the file to `wifiSecrets.h` by removing the `.example` suffix. Do not publish this private file.
+4. Build and flash the firmware.
 
-Open "components/wifi_manager/private/wifiSecrets.h.example", Enter your Wi-Fi credentials, Remove the ".example" suffix by renaming and save the file.
-
-Then build:
-
+```bash
 idf.py set-target esp32s3
 idf.py build
 idf.py -p PORT flash monitor
+```
 
-## Future Steps
+Replace `PORT` with your serial port.
 
-Add remote monitoring and online control, potentially using MQTT.
+## Future Work
+
+Remote monitoring and online control may be added in the future, potentially using MQTT.
