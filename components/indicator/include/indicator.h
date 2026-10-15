@@ -15,6 +15,8 @@ extern "C"
         INDICATOR_EVENT_SOIL_DRY,
         INDICATOR_EVENT_PUMP_ACTIVE,
         INDICATOR_EVENT_CRITICAL,
+        INDICATOR_EVENT_SOIL_PROBE_OUT_OF_SOIL,
+        INDICATOR_EVENT_SOIL_PROBE_DISCONNECTED,
         INDICATOR_EVENT_COUNT,
     } indicator_event_t;
     esp_err_t indicator_init(void);

@@ -79,6 +79,14 @@ static indicator_pattern_t get_pattern(void)
     {
         return (indicator_pattern_t){255, 0, 0, 100, 100};
     }
+    if (events & (1U << INDICATOR_EVENT_SOIL_PROBE_OUT_OF_SOIL))
+    {
+        return (indicator_pattern_t){160, 0, 255, 250, 250};
+    }
+    if (events & (1U << INDICATOR_EVENT_SOIL_PROBE_DISCONNECTED))
+    {
+        return (indicator_pattern_t){255, 255, 255, 250, 250};
+    }
     if (events & (1U << INDICATOR_EVENT_WIFI_DISCONNECTED))
     {
         return (indicator_pattern_t){255, 0, 0, 250, 1750};

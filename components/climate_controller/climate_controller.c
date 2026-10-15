@@ -3,6 +3,8 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "fan_actuator.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "mq135_sensor.h"
 #include <math.h>
 
@@ -18,19 +20,19 @@
 #define TEMPERATURE_HYSTERESIS 0.5f
 #define HUMIDITY_HYSTERESIS 2.0f
 #define GAS_HYSTERESIS 150
-#define DHT22_STALE_WARN_MS 15000
+#define DHT22_STALE_MS 15000
+#define DHT22_FAILSAFE_SPEED FAN_ACTUATOR_SPEED_LOW
 
 static const char *TAG = "climate_controller";
+static SemaphoreHandle_t s_lock;
 static float s_temperature;
 static float s_humidity;
 static int s_gas_raw;
-static bool s_have_temperature;
-static bool s_have_humidity;
-static bool s_have_gas;
 static int s_level_temperature;
 static int s_level_humidity;
 static int s_level_gas;
 static int64_t s_dht22_sensor_last_ok_us;
+static bool s_dht22_was_fresh = true;
 static fan_actuator_speed_t s_last_applied_speed = FAN_ACTUATOR_SPEED_OFF;
 
 static fan_actuator_speed_t higher_speed(fan_actuator_speed_t a, fan_actuator_speed_t b)
@@ -57,24 +59,42 @@ static int level_of(int current, const int on_threshold[3], int hysteresis, int 
 
 static void evaluate_and_apply_fan_speed(void)
 {
-    if (!s_have_temperature || !s_have_humidity || !s_have_gas)
-    {
-        return;
-    }
-    const int64_t now_us = esp_timer_get_time();
-    if ((now_us - s_dht22_sensor_last_ok_us) / 1000 > DHT22_STALE_WARN_MS)
-    {
-        ESP_LOGW(TAG, "No valid DHT22 reading for %lld s; keeping current speed",
-                 (long long)((now_us - s_dht22_sensor_last_ok_us) / 1000000));
-        s_dht22_sensor_last_ok_us = now_us;
-    }
     static const int temp_levels[3] = {(int)(TEMPERATURE_ON_LOW * 10), (int)(TEMPERATURE_ON_MEDIUM * 10), (int)(TEMPERATURE_ON_FAST * 10)};
     static const int hum_levels[3] = {(int)HUMIDITY_ON_LOW, (int)HUMIDITY_ON_MEDIUM, (int)HUMIDITY_ON_FAST};
     static const int gas_levels[3] = {GAS_ON_LOW, GAS_ON_MEDIUM, GAS_ON_FAST};
-    s_level_temperature = level_of((int)(s_temperature * 10.0f), temp_levels, (int)(TEMPERATURE_HYSTERESIS * 10), s_level_temperature);
-    s_level_humidity = level_of((int)(s_humidity + 0.5f), hum_levels, (int)HUMIDITY_HYSTERESIS, s_level_humidity);
+
+    const int64_t now_us = esp_timer_get_time();
+    const bool dht22_is_fresh = (now_us - s_dht22_sensor_last_ok_us) / 1000 <= DHT22_STALE_MS;
+    if (dht22_is_fresh != s_dht22_was_fresh)
+    {
+        s_dht22_was_fresh = dht22_is_fresh;
+        if (dht22_is_fresh)
+        {
+            ESP_LOGI(TAG, "DHT22 readings are back to normal");
+        }
+        else
+        {
+            ESP_LOGW(TAG, "No valid DHT22 reading for %d s; using fail-safe fan speed", DHT22_STALE_MS / 1000);
+        }
+    }
+
+    if (dht22_is_fresh)
+    {
+        s_level_temperature = level_of((int)(s_temperature * 10.0f), temp_levels, (int)(TEMPERATURE_HYSTERESIS * 10), s_level_temperature);
+        s_level_humidity = level_of((int)(s_humidity + 0.5f), hum_levels, (int)HUMIDITY_HYSTERESIS, s_level_humidity);
+    }
+    else
+    {
+        s_level_temperature = 0;
+        s_level_humidity = 0;
+    }
     s_level_gas = level_of(s_gas_raw, gas_levels, GAS_HYSTERESIS, s_level_gas);
+
     fan_actuator_speed_t speed = (fan_actuator_speed_t)higher_speed(higher_speed(s_level_temperature, s_level_humidity), s_level_gas);
+    if (!dht22_is_fresh)
+    {
+        speed = higher_speed(speed, DHT22_FAILSAFE_SPEED);
+    }
     const bool speed_changed = speed != s_last_applied_speed;
     if (speed_changed)
     {
@@ -97,24 +117,31 @@ static void on_dht22_sensor_reading(const dht22_sensor_reading_t *reading, void 
         ESP_LOGW(TAG, "DHT22 gave implausible values (T=%.1f H=%.1f), ignoring", reading->temperature, reading->humidity);
         return;
     }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
     s_temperature = reading->temperature;
     s_humidity = reading->humidity;
-    s_have_temperature = true;
-    s_have_humidity = true;
     s_dht22_sensor_last_ok_us = esp_timer_get_time();
     evaluate_and_apply_fan_speed();
+    xSemaphoreGive(s_lock);
 }
 
 static void on_mq135_sensor_reading(const mq135_sensor_reading_t *reading, void *context)
 {
     (void)context;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
     s_gas_raw = reading->raw_value;
-    s_have_gas = true;
     evaluate_and_apply_fan_speed();
+    xSemaphoreGive(s_lock);
 }
 
 esp_err_t climate_controller_init(void)
 {
+    s_lock = xSemaphoreCreateMutex();
+    if (s_lock == NULL)
+    {
+        ESP_LOGE(TAG, "Could not create lock");
+        return ESP_ERR_NO_MEM;
+    }
     esp_err_t err = fan_actuator_init();
     if (err != ESP_OK)
     {

@@ -10,14 +10,28 @@
 #include "soil_moisture_sensor.h"
 
 #define SOIL_DRY_THRESHOLD 350
-#define SOIL_DRY_CONFIRMATIONS 3
+#define SOIL_DRY_CONFIRMATIONS 40
 #define IRRIGATION_COOLDOWN_MS (15 * 60 * 1000)
+
+#define SOIL_OUT_OF_SOIL_THRESHOLD 450
+#define SOIL_OUT_OF_SOIL_CLEAR_THRESHOLD 430
+#define SOIL_DISCONNECTED_THRESHOLD 20
+#define SOIL_PROBE_STATE_CONFIRMATIONS 3
 
 static const char *TAG = "irrigation_controller";
 static int64_t s_next_allowed_us;
 static volatile bool s_cycle_active;
-static volatile uint8_t s_dry_readings;
+static volatile uint16_t s_dry_readings;
 static TaskHandle_t s_irrigation_task_handle;
+
+typedef enum
+{
+    PROBE_OK = 0,
+    PROBE_OUT_OF_SOIL,
+    PROBE_DISCONNECTED,
+} probe_state_t;
+static probe_state_t s_probe_state = PROBE_OK;
+static uint8_t s_probe_change_readings;
 
 static int64_t now_us(void)
 {
@@ -67,10 +81,63 @@ static void irrigation_task(void *arg)
     }
 }
 
+static probe_state_t classify_probe(int value)
+{
+    if (value < SOIL_DISCONNECTED_THRESHOLD)
+    {
+        return PROBE_DISCONNECTED;
+    }
+    if (value >= SOIL_OUT_OF_SOIL_THRESHOLD)
+    {
+        return PROBE_OUT_OF_SOIL;
+    }
+    if (value >= SOIL_OUT_OF_SOIL_CLEAR_THRESHOLD && s_probe_state == PROBE_OUT_OF_SOIL)
+    {
+        return PROBE_OUT_OF_SOIL;
+    }
+    return PROBE_OK;
+}
+
+static bool update_probe_state(int value)
+{
+    const probe_state_t seen = classify_probe(value);
+    if (seen == s_probe_state)
+    {
+        s_probe_change_readings = 0;
+    }
+    else if (++s_probe_change_readings >= SOIL_PROBE_STATE_CONFIRMATIONS)
+    {
+        s_probe_change_readings = 0;
+        s_probe_state = seen;
+        s_dry_readings = 0;
+        indicator_set_event(INDICATOR_EVENT_SOIL_PROBE_OUT_OF_SOIL, seen == PROBE_OUT_OF_SOIL);
+        indicator_set_event(INDICATOR_EVENT_SOIL_PROBE_DISCONNECTED, seen == PROBE_DISCONNECTED);
+        if (seen == PROBE_OUT_OF_SOIL)
+        {
+            indicator_set_event(INDICATOR_EVENT_SOIL_DRY, false);
+            ESP_LOGW(TAG, "Soil probe is OUT OF SOIL (value=%d); irrigation paused", value);
+        }
+        else if (seen == PROBE_DISCONNECTED)
+        {
+            indicator_set_event(INDICATOR_EVENT_SOIL_DRY, false);
+            ESP_LOGW(TAG, "Soil probe is NOT CONNECTED (value=%d); irrigation paused", value);
+        }
+        else
+        {
+            ESP_LOGI(TAG, "Soil probe is back in the soil (value=%d)", value);
+        }
+    }
+    return s_probe_state == PROBE_OK;
+}
+
 static void on_soil_moisture_reading(const soil_moisture_sensor_reading_t *reading,
                                      void *context)
 {
     (void)context;
+    if (!update_probe_state(reading->average_value))
+    {
+        return;
+    }
     if (reading->average_value >= SOIL_DRY_THRESHOLD)
     {
         if (s_dry_readings < SOIL_DRY_CONFIRMATIONS)

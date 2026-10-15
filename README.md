@@ -30,7 +30,9 @@ I moved from the Arduino version to ESP-IDF when the project needed a clearer wa
 
 ## Gas Monitoring
 
-The low-cost MQ135 continuously monitors gas changes that may indicate early plant decay or other greenhouse problems, providing early warnings even before visible symptoms appear. While it cannot diagnose specific diseases, it adds an affordable layer of preventive monitoring between visual inspections.
+The greenhouse air is not always checked by a person, so a low-cost MQ135 gas sensor provides a coarse, continuous indication of air-quality changes between visits. The MQ135 responds to several gases (e.g. ammonia, CO₂, smoke), is not selective, and its raw ADC output is not calibrated to a concentration. The firmware averages the last 20 samples (2 s) and compares the result against three thresholds; together with temperature and humidity, this sets the fan speed (the highest speed requested by any of the three inputs wins).
+
+**Limitations:** the thresholds are fixed starting values, and the sensor needs a warm-up period and drifts with temperature and humidity, so they should be re-tuned for each installation. A more selective sensor would be needed for a real air-quality measurement.
 
 ## Build
 
