@@ -30,20 +30,19 @@ I moved from the Arduino version to ESP-IDF when the project needed a clearer wa
 
 ## Gas Monitoring
 
-The MQ135 monitors changes in gas levels. These readings can help identify unusual greenhouse conditions, but they do not directly detect plant diseases.
+The low-cost MQ135 continuously monitors gas changes that may indicate early plant decay or other greenhouse problems, providing early warnings even before visible symptoms appear. While it cannot diagnose specific diseases, it adds an affordable layer of preventive monitoring between visual inspections.
 
 ## Build
 
-1. Configure Wi-Fi credentials in `components/wifi_manager/private/wifiSecrets.h.example`.
-2. Rename the file to `wifiSecrets.h` and enter your credentials.
+1. Install [Visual Studio Code](https://code.visualstudio.com/) and the [Espressif IDF extension](https://marketplace.visualstudio.com/items?itemName=espressif.esp-idf-extension).
+2. Copy `components/wifi_manager/private/wifiSecrets.h.example` as `wifiSecrets.h` in the same directory, then configure your Wi-Fi credentials.
 3. Set the target, build, and flash the firmware.
-```Bash
-idf.py set-target esp32s3
-idf.py build
-idf.py -p PORT flash monitor
-```
-Replace `PORT` with your serial port.
 
+**CLI commands:**
+```bash
+idf.py set-target esp32s3
+idf.py build flash monitor
+```
 ## Related Project
 
 See [SmartGreenhouse-Arduino](https://github.com/AminRazm/SmartGreenhouse-Arduino) for the earlier Arduino and C++ version.
