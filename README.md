@@ -2,6 +2,9 @@
 
 This is the ESP-IDF version of my ESP32-S3 smart greenhouse project, rewritten in C. It monitors environmental conditions and automatically controls the fan, grow light, and watering system.
 
+Watch the project demo video on YouTube:
+https://youtu.be/kshUbCskHOQ?si=70YcUaTW5qpkAsB5
+
 ## Features
 
 - Climate control: Uses temperature, humidity, and gas readings to control fan speed.
